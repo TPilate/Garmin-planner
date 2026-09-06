@@ -1,0 +1,16 @@
+node_modules/
+.nuxt/
+.output/
+.data/
+dist/
+*.local
+.env
+db/local.db
+db/local.db-*
+db/test.db
+db/test.db-*
+python-worker/.venv/
+python-worker/__pycache__/
+python-worker/**/__pycache__/
+scripts/spike-garth-sync-output/
+.DS_Store

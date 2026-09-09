@@ -60,3 +60,46 @@ export async function addGarmin(date: string, restingHr: number | null, hrvLastN
 export async function addLeave(startDate: string, endDate: string) {
   await db.insert(leavePeriods).values({ startDate, endDate, type: 'vacation' })
 }
+
+export async function addDisciplineGoal(overrides: {
+  discipline: 'running' | 'swimming' | 'strength' | 'cycling'
+  active?: boolean
+  weeklyFrequencyTarget?: number
+  blockLengthWeeks?: number
+  planStartDate?: string
+}) {
+  await db.insert(disciplineGoals).values({
+    active: true,
+    weeklyFrequencyTarget: 3,
+    blockLengthWeeks: 4,
+    planStartDate: '2026-08-31',
+    ...overrides,
+  })
+}
+
+export async function addSessionTemplate(overrides: {
+  name?: string
+  discipline?: 'running' | 'swimming' | 'strength' | 'cycling'
+  targetIntensity?: 'mobility' | 'easy' | 'moderate' | 'hard'
+  durationMinutes?: number
+  phase?: 'build' | 'deload' | 'any'
+} = {}) {
+  const now = new Date()
+  const [row] = await db.insert(sessionTemplates).values({
+    name: 'Test session',
+    discipline: 'running',
+    targetIntensity: 'easy',
+    durationMinutes: 30,
+    phase: 'any',
+    isArchived: false,
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  }).returning()
+  return row
+}
+
+export async function addLoggedSession(date: string, sessionTemplateId: number, status: 'planned' | 'completed' | 'skipped' = 'completed') {
+  const now = new Date()
+  await db.insert(loggedSessions).values({ date, sessionTemplateId, status, createdAt: now, updatedAt: now })
+}

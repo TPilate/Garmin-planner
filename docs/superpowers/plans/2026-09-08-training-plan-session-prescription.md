@@ -278,7 +278,7 @@ Create `test/trainingPlan.test.ts`:
 ```typescript
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getAvailableWindow, NO_SHIFT_MINUTES } from '../server/utils/trainingPlan'
-import { addShift, resetTables, seedShiftCodes, TEST_TZ } from './helpers'
+import { addShift, confirmMonth, resetTables, seedShiftCodes, TEST_TZ } from './helpers'
 
 beforeEach(async () => {
   await resetTables()
@@ -293,21 +293,24 @@ describe('getAvailableWindow', () => {
   })
 
   it('HALF (1/2, 07:00-14:00): the bigger free block is the evening, after the shift', async () => {
-    await addShift('2026-09-15', '1/2', 1)
+    const rm = await confirmMonth(2026, 9)
+    await addShift('2026-09-15', '1/2', rm.id)
     const window = await getAvailableWindow('2026-09-15', TEST_TZ)
     expect(window.minutesAvailable).toBe(600) // 24:00 - 14:00
     expect(window.reason).toBe('after shift')
   })
 
   it('LONG_DAY (J, 07:00-20:00): the bigger free block is early morning, before the shift', async () => {
-    await addShift('2026-09-15', 'J', 1)
+    const rm = await confirmMonth(2026, 9)
+    await addShift('2026-09-15', 'J', rm.id)
     const window = await getAvailableWindow('2026-09-15', TEST_TZ)
     expect(window.minutesAvailable).toBe(420) // 07:00 - 00:00
     expect(window.reason).toBe('before shift')
   })
 
   it('PRE_NIGHT (N starting today, 20:00-08:00+1): the whole day before the shift is free', async () => {
-    await addShift('2026-09-15', 'N', 1)
+    const rm = await confirmMonth(2026, 9)
+    await addShift('2026-09-15', 'N', rm.id)
     const window = await getAvailableWindow('2026-09-15', TEST_TZ)
     expect(window.minutesAvailable).toBe(1200) // 20:00 - 00:00
     expect(window.reason).toBe('before shift')
@@ -315,7 +318,7 @@ describe('getAvailableWindow', () => {
 })
 ```
 
-Note: `addShift(date, code, rosterMonthId)` in `test/helpers.ts` only needs a `rosterMonthId` to satisfy the FK — it doesn't need a confirmed roster month for this test, since `getAvailableWindow` reads `shifts` directly and doesn't call `getDaySummary`. Pass `1` (any integer works; `shifts.rosterMonthId` has no FK existence check enforced by SQLite unless foreign keys are pragma-enabled — confirm this passes; if the test fails on the FK, call `await confirmMonth(2026, 9)` first and use `rm.id` instead of the literal `1`).
+Note: `addShift(date, code, rosterMonthId)` in `test/helpers.ts` needs a real `rosterMonthId` to satisfy the FK — always create one via `confirmMonth(2026, 9)` and pass `rm.id`, even though `getAvailableWindow` itself never checks roster confirmation status (it reads `shifts` directly, never `getDaySummary`).
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -372,7 +375,7 @@ export async function getAvailableWindow(date: string, timezone: string): Promis
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- test/trainingPlan.test.ts`
-Expected: PASS (4/4). If the FK note from Step 1 was needed, the test file should now use `confirmMonth`/`rm.id` and still pass.
+Expected: PASS (4/4).
 
 - [ ] **Step 5: Commit**
 
@@ -541,7 +544,14 @@ Expected: FAIL — `getDisciplineProgress is not exported` (or similar).
 
 - [ ] **Step 4: Implement `getDisciplineProgress`**
 
-Add to `server/utils/trainingPlan.ts` (extend the existing imports at the top to `import { and, eq, gte, lte } from 'drizzle-orm'` and `import { disciplineGoals, loggedSessions, sessionTemplates, shifts } from '~~/db/schema'`):
+Add to `server/utils/trainingPlan.ts`. First, **replace** (not append to) the two existing import lines at the top of the file with:
+
+```typescript
+import { and, eq, gte, lte } from 'drizzle-orm'
+import { disciplineGoals, loggedSessions, sessionTemplates, shifts } from '~~/db/schema'
+```
+
+(`eq` and `shifts` were already imported by Task 2 — this replaces those two lines with the superset needed from here on, it does not add a second, duplicate import from the same module.) Then append the following below the existing `getAvailableWindow`:
 
 ```typescript
 export type Discipline = 'running' | 'swimming' | 'strength' | 'cycling'
@@ -768,7 +778,7 @@ Expected: FAIL — `getDailyPrescription`/`ensurePlannedSession` not exported.
 
 - [ ] **Step 4: Implement `getDailyPrescription` and `ensurePlannedSession`**
 
-Extend `server/utils/trainingPlan.ts` — update the top imports to:
+Extend `server/utils/trainingPlan.ts`. **Replace** the file's existing `import { and, eq, gte, lte } from 'drizzle-orm'` line (from Task 3) with the superset below, and add the new `./dayType` import — do not leave the old `drizzle-orm` import line in place alongside the new one (that would be a duplicate-identifier error on `eq`):
 
 ```typescript
 import { and, eq, gte, lt, lte, or } from 'drizzle-orm'

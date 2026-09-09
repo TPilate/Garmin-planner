@@ -1,7 +1,8 @@
-import { and, eq, gte, lte } from 'drizzle-orm'
+import { and, eq, gte, lt, lte, or } from 'drizzle-orm'
 import { DateTime } from 'luxon'
 import { db } from '~~/db/client'
 import { disciplineGoals, loggedSessions, sessionTemplates, shifts } from '~~/db/schema'
+import { getDaySummary, INTENSITY_ORDER, type IntensityLevel } from './dayType'
 
 // No shift row this day (off/leave) -> a generous but bounded default, so a full rest day never
 // suggests an unrealistically long single session. Deliberately raw (see design doc): this does
@@ -120,4 +121,119 @@ export async function getDisciplineProgress(discipline: Discipline, asOfDate: st
     deficit: goal.weeklyFrequencyTarget - completedThisWeek,
     lastSessionDate,
   }
+}
+
+export interface Prescription {
+  date: string
+  hasSession: boolean
+  discipline?: Discipline
+  sessionTemplateId?: number
+  reason?: string
+}
+
+// Avoids suggesting the exact same template on consecutive outings, but only if excluding
+// recently-used templates still leaves a candidate — "avoid repetition" must never be the reason
+// a day ends up with NO session.
+const RECENT_VARIETY_DAYS = 14
+
+async function getRecentlyUsedTemplateIds(date: string): Promise<Set<number>> {
+  const cutoff = DateTime.fromISO(date).minus({ days: RECENT_VARIETY_DAYS }).toISODate()!
+  const rows = await db.query.loggedSessions.findMany({
+    where: and(gte(loggedSessions.date, cutoff), lt(loggedSessions.date, date)),
+    columns: { sessionTemplateId: true },
+  })
+  return new Set(rows.map(r => r.sessionTemplateId).filter((id): id is number => id !== null))
+}
+
+async function pickTemplate(
+  discipline: Discipline,
+  ceiling: IntensityLevel,
+  minutesAvailable: number,
+  phase: PlanPhase,
+  excludeIds: Set<number>,
+): Promise<{ id: number } | null> {
+  const maxIndex = INTENSITY_ORDER.indexOf(ceiling)
+  const candidates = await db.query.sessionTemplates.findMany({
+    where: and(
+      eq(sessionTemplates.discipline, discipline),
+      eq(sessionTemplates.isArchived, false),
+      lte(sessionTemplates.durationMinutes, minutesAvailable),
+      or(eq(sessionTemplates.phase, phase), eq(sessionTemplates.phase, 'any')),
+    ),
+  })
+  const fitting = candidates.filter(t => INTENSITY_ORDER.indexOf(t.targetIntensity) <= maxIndex)
+  if (fitting.length === 0) return null
+
+  const fresh = fitting.filter(t => !excludeIds.has(t.id))
+  const pool = fresh.length > 0 ? fresh : fitting
+  // Smallest id wins among ties — deterministic, so re-reading an un-acted-on day always
+  // returns the same proposal.
+  return pool.reduce((min, t) => (t.id < min.id ? t : min))
+}
+
+export async function getDailyPrescription(date: string, timezone: string): Promise<Prescription> {
+  const daySummary = await getDaySummary(date, timezone)
+  if (daySummary.intensityCeiling === null || daySummary.intensityCeiling === 'rest') {
+    return { date, hasSession: false, reason: daySummary.reason ?? `day type ${daySummary.dayType} allows no session` }
+  }
+  const ceiling = daySummary.intensityCeiling
+
+  const window = await getAvailableWindow(date, timezone)
+
+  const progresses: DisciplineProgress[] = []
+  for (const discipline of DISCIPLINES) {
+    const progress = await getDisciplineProgress(discipline, date)
+    if (progress) progresses.push(progress)
+  }
+
+  const isoWeekday = DateTime.fromISO(date, { zone: timezone }).weekday // 1=Mon..7=Sun
+  const daysLeftInWeek = 8 - isoWeekday // includes today
+
+  const sentinel = '0000-00-00' // sorts before every real date -> "never trained" goes first
+  const ranked = progresses
+    .filter(p => p.deficit > 0)
+    .sort((a, b) => {
+      const urgencyDiff = (b.deficit / daysLeftInWeek) - (a.deficit / daysLeftInWeek)
+      if (urgencyDiff !== 0) return urgencyDiff
+      const aLast = a.lastSessionDate ?? sentinel
+      const bLast = b.lastSessionDate ?? sentinel
+      return aLast < bLast ? -1 : aLast > bLast ? 1 : 0
+    })
+
+  const excludeIds = await getRecentlyUsedTemplateIds(date)
+
+  for (const progress of ranked) {
+    const template = await pickTemplate(progress.discipline, ceiling, window.minutesAvailable, progress.phase, excludeIds)
+    if (template) {
+      return { date, hasSession: true, discipline: progress.discipline, sessionTemplateId: template.id }
+    }
+  }
+
+  return { date, hasSession: false, reason: 'no discipline had a matching session template for this ceiling/window' }
+}
+
+// Idempotent: only writes when no logged_sessions row exists yet for this date. Never touches
+// an existing row, whatever its status — see design doc "Cas limites".
+export async function ensurePlannedSession(date: string, timezone: string): Promise<number | null> {
+  const existing = await db.query.loggedSessions.findFirst({ where: eq(loggedSessions.date, date) })
+  if (existing) return existing.id
+
+  const prescription = await getDailyPrescription(date, timezone)
+  if (!prescription.hasSession) return null
+
+  const daySummary = await getDaySummary(date, timezone)
+  const now = new Date()
+  const [inserted] = await db.insert(loggedSessions).values({
+    date,
+    sessionTemplateId: prescription.sessionTemplateId!,
+    plannedIntensityCeiling: daySummary.intensityCeiling,
+    status: 'planned',
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing({ target: loggedSessions.date }).returning({ id: loggedSessions.id })
+
+  if (inserted) return inserted.id
+  // Another concurrent call won the race — re-read rather than assume failure.
+  const row = await db.query.loggedSessions.findFirst({ where: eq(loggedSessions.date, date) })
+  return row?.id ?? null
 }

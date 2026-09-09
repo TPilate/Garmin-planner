@@ -8,7 +8,7 @@ import { calendarDateOf } from './shiftResolution'
 export type DayType = 'off' | 'half' | 'pre_night' | 'long_day' | 'post_night' | 'leave' | 'no_data' | 'unknown'
 export type IntensityLevel = 'rest' | 'mobility' | 'easy' | 'moderate' | 'hard'
 
-const INTENSITY_ORDER: IntensityLevel[] = ['rest', 'mobility', 'easy', 'moderate', 'hard']
+export const INTENSITY_ORDER: IntensityLevel[] = ['rest', 'mobility', 'easy', 'moderate', 'hard']
 
 // Garmin can never force full REST on a non-post-night day — floor is MOBILITY (index 1), to
 // avoid a false-positive readiness dip silently blocking a legitimately free day. Since callers

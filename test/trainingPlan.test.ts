@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { getAvailableWindow, getDisciplineProgress, NO_SHIFT_MINUTES } from '../server/utils/trainingPlan'
+import { db } from '~~/db/client'
+import { ensurePlannedSession, getAvailableWindow, getDailyPrescription, getDisciplineProgress, NO_SHIFT_MINUTES } from '../server/utils/trainingPlan'
 import { addDisciplineGoal, addLoggedSession, addSessionTemplate, addShift, confirmMonth, resetTables, seedShiftCodes, TEST_TZ } from './helpers'
 
 beforeEach(async () => {
@@ -118,5 +119,91 @@ describe('getDisciplineProgress', () => {
 
     const withHistory = await getDisciplineProgress('running', '2026-09-07')
     expect(withHistory?.lastSessionDate).toBe('2026-09-03')
+  })
+})
+
+describe('getDailyPrescription', () => {
+  it('no session on a REST-ceiling day (post_night)', async () => {
+    const rm = await confirmMonth(2026, 9)
+    await addShift('2026-09-14', 'N', rm.id) // ends 2026-09-15 08:00, post_night on the 15th
+    const prescription = await getDailyPrescription('2026-09-15', TEST_TZ)
+    expect(prescription.hasSession).toBe(false)
+  })
+
+  it('no session on a NO_DATA day (roster not confirmed)', async () => {
+    const prescription = await getDailyPrescription('2026-09-15', TEST_TZ)
+    expect(prescription.hasSession).toBe(false)
+  })
+
+  it('picks the discipline with the most urgent weekly deficit', async () => {
+    await confirmMonth(2026, 9)
+    // Both disciplines want 3/week; running already has 2 completed this week, swimming has 0 ->
+    // swimming is more urgent (deficit 3 vs deficit 1).
+    await addDisciplineGoal({ discipline: 'running', weeklyFrequencyTarget: 3, planStartDate: '2026-09-07' })
+    await addDisciplineGoal({ discipline: 'swimming', weeklyFrequencyTarget: 3, planStartDate: '2026-09-07' })
+    const runningTemplate = await addSessionTemplate({ discipline: 'running', targetIntensity: 'easy', durationMinutes: 30 })
+    const swimTemplate = await addSessionTemplate({ discipline: 'swimming', targetIntensity: 'easy', durationMinutes: 30 })
+    await addLoggedSession('2026-09-08', runningTemplate.id, 'completed')
+    await addLoggedSession('2026-09-09', runningTemplate.id, 'completed')
+
+    const prescription = await getDailyPrescription('2026-09-10', TEST_TZ) // OFF day, ceiling=hard
+    expect(prescription.hasSession).toBe(true)
+    expect(prescription.discipline).toBe('swimming')
+    expect(prescription.sessionTemplateId).toBe(swimTemplate.id)
+  })
+
+  it('never picks an inactive discipline even if it would otherwise be most urgent', async () => {
+    await confirmMonth(2026, 9)
+    await addDisciplineGoal({ discipline: 'cycling', active: false, weeklyFrequencyTarget: 5, planStartDate: '2026-09-07' })
+    await addDisciplineGoal({ discipline: 'running', weeklyFrequencyTarget: 1, planStartDate: '2026-09-07' })
+    const runningTemplate = await addSessionTemplate({ discipline: 'running', targetIntensity: 'easy', durationMinutes: 30 })
+    await addSessionTemplate({ discipline: 'cycling', targetIntensity: 'easy', durationMinutes: 30 })
+
+    const prescription = await getDailyPrescription('2026-09-10', TEST_TZ)
+    expect(prescription.discipline).toBe('running')
+    expect(prescription.sessionTemplateId).toBe(runningTemplate.id)
+  })
+
+  it('no session when the ceiling is too low for every candidate template', async () => {
+    const rm = await confirmMonth(2026, 9)
+    await addShift('2026-09-15', 'J', rm.id) // long_day -> ceiling mobility
+    await addDisciplineGoal({ discipline: 'running', weeklyFrequencyTarget: 3, planStartDate: '2026-09-07' })
+    await addSessionTemplate({ discipline: 'running', targetIntensity: 'easy', durationMinutes: 20 }) // easy > mobility ceiling
+
+    const prescription = await getDailyPrescription('2026-09-15', TEST_TZ)
+    expect(prescription.hasSession).toBe(false)
+    expect(prescription.reason).toMatch(/no discipline/)
+  })
+})
+
+describe('ensurePlannedSession', () => {
+  it('creates a planned logged_sessions row on first call', async () => {
+    await confirmMonth(2026, 9)
+    await addDisciplineGoal({ discipline: 'running', weeklyFrequencyTarget: 3, planStartDate: '2026-09-07' })
+    const template = await addSessionTemplate({ discipline: 'running', targetIntensity: 'easy', durationMinutes: 30 })
+
+    const id = await ensurePlannedSession('2026-09-10', TEST_TZ)
+    expect(id).not.toBeNull()
+    const row = await db.query.loggedSessions.findFirst({ where: (t, { eq }) => eq(t.id, id!) })
+    expect(row?.sessionTemplateId).toBe(template.id)
+    expect(row?.status).toBe('planned')
+  })
+
+  it('never overwrites an already-logged (completed) session', async () => {
+    await confirmMonth(2026, 9)
+    await addDisciplineGoal({ discipline: 'running', weeklyFrequencyTarget: 3, planStartDate: '2026-09-07' })
+    const originalTemplate = await addSessionTemplate({ discipline: 'running', targetIntensity: 'easy', durationMinutes: 30 })
+    await addLoggedSession('2026-09-10', originalTemplate.id, 'completed')
+
+    const otherTemplate = await addSessionTemplate({ discipline: 'running', targetIntensity: 'hard', durationMinutes: 30 })
+    const id = await ensurePlannedSession('2026-09-10', TEST_TZ)
+    const row = await db.query.loggedSessions.findFirst({ where: (t, { eq }) => eq(t.id, id!) })
+    expect(row?.sessionTemplateId).toBe(originalTemplate.id) // untouched, not otherTemplate
+    expect(row?.status).toBe('completed')
+  })
+
+  it('creates no row when there is no session to plan', async () => {
+    const id = await ensurePlannedSession('2026-09-15', TEST_TZ) // no confirmed month -> NO_DATA
+    expect(id).toBeNull()
   })
 })

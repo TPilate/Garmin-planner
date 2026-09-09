@@ -1,11 +1,14 @@
 import { eq } from 'drizzle-orm'
 import { db } from '~~/db/client'
-import { garminDailyMetrics, leavePeriods, rosterMonths, shiftCodes, shifts } from '~~/db/schema'
+import { disciplineGoals, garminDailyMetrics, leavePeriods, loggedSessions, rosterMonths, sessionTemplates, shiftCodes, shifts } from '~~/db/schema'
 import { resolveShiftTimes } from '../server/utils/shiftResolution'
 
 export const TEST_TZ = 'Europe/Paris'
 
 export async function resetTables() {
+  await db.delete(loggedSessions)
+  await db.delete(sessionTemplates)
+  await db.delete(disciplineGoals)
   await db.delete(shifts)
   await db.delete(leavePeriods)
   await db.delete(garminDailyMetrics)

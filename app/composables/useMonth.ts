@@ -10,6 +10,8 @@ export interface MonthDay {
   dayType?: DayType
   intensityCeiling?: IntensityLevel | null
   metricsDegraded?: boolean | null
+  sessionName?: string | null
+  discipline?: 'running' | 'swimming' | 'strength' | 'cycling' | null
 }
 
 export interface DaySummaryData {
@@ -34,6 +36,18 @@ export interface ConfirmResult {
   requiresOverride?: boolean
   workedDays: number
   expectedRange?: [number, number]
+}
+
+export interface TrainingDay {
+  date: string
+  hasSession: boolean
+  discipline?: 'running' | 'swimming' | 'strength' | 'cycling'
+  sessionName?: string
+  targetIntensity?: string
+  durationMinutes?: number
+  structureJson?: string | null
+  status?: 'planned' | 'completed' | 'skipped'
+  reason?: string
 }
 
 export function useMonth(year: Ref<number>, month: Ref<number>) {
@@ -72,6 +86,19 @@ export function useMonth(year: Ref<number>, month: Ref<number>) {
     }
   }
 
+  // Separate fetch, merged in by date — same pattern as loadDaySummaries(). Safe to call even
+  // for a NO_DATA month: those days just come back with hasSession=false.
+  async function loadTrainingPlan() {
+    const data = await requestFetch<{ days: TrainingDay[] }>(`/api/training/${year.value}/${month.value}`)
+    const byDate = new Map(data.days.map(t => [t.date, t]))
+    for (const day of days.value) {
+      const training = byDate.get(day.date)
+      if (!training?.hasSession) continue
+      day.sessionName = training.sessionName
+      day.discipline = training.discipline
+    }
+  }
+
   async function save() {
     await requestFetch(`/api/roster/${year.value}/${month.value}`, {
       method: 'PUT',
@@ -89,5 +116,5 @@ export function useMonth(year: Ref<number>, month: Ref<number>) {
     })
   }
 
-  return { days, status, loading, load, loadDaySummaries, save, confirmMonth }
+  return { days, status, loading, load, loadDaySummaries, loadTrainingPlan, save, confirmMonth }
 }

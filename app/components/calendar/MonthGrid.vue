@@ -19,6 +19,8 @@ const emit = defineEmits<{ toggle: [date: string] }>()
       :disabled="disabled"
       :intensity-ceiling="d.intensityCeiling"
       :metrics-degraded="d.metricsDegraded"
+      :session-name="d.sessionName"
+      :discipline="d.discipline"
       @click="emit('toggle', d.date)"
     />
   </div>

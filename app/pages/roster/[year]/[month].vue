@@ -9,7 +9,7 @@ const route = useRoute()
 const year = computed(() => Number(route.params.year))
 const month = computed(() => Number(route.params.month))
 
-const { days, status, loading, load, loadDaySummaries, save, confirmMonth } = useMonth(year, month)
+const { days, status, loading, load, loadDaySummaries, loadTrainingPlan, save, confirmMonth } = useMonth(year, month)
 const { data: shiftCodesData } = await useFetch<ShiftCode[]>('/api/shift-codes')
 
 async function loadAll() {
@@ -17,6 +17,7 @@ async function loadAll() {
   // Only meaningful once the month is confirmed (day-summary returns NO_DATA otherwise) —
   // fetched unconditionally since that's cheap and keeps the logic in one place.
   await loadDaySummaries()
+  await loadTrainingPlan()
 }
 
 await loadAll()
@@ -44,6 +45,7 @@ async function onSave() {
   try {
     await save()
     await loadDaySummaries() // now NO_DATA everywhere, since saving reverts the month to draft
+    await loadTrainingPlan()
   }
   finally {
     saving.value = false
@@ -64,6 +66,7 @@ async function onConfirm(override = false) {
     overridePrompt.value = null
     status.value = 'confirmed'
     await loadDaySummaries()
+    await loadTrainingPlan()
   }
   finally {
     confirming.value = false

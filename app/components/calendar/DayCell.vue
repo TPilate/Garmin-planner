@@ -6,6 +6,8 @@ defineProps<{
   disabled?: boolean
   intensityCeiling?: 'rest' | 'mobility' | 'easy' | 'moderate' | 'hard' | null
   metricsDegraded?: boolean | null
+  sessionName?: string | null
+  discipline?: 'running' | 'swimming' | 'strength' | 'cycling' | null
 }>()
 defineEmits<{ click: [] }>()
 
@@ -34,6 +36,7 @@ const CODE_COLORS: Record<string, string> = {
     <span v-if="code" class="code">{{ code }}</span>
     <span v-else-if="isLeave" class="code leave-label">congé</span>
     <CalendarIntensityBadge v-if="intensityCeiling !== undefined" :intensity-ceiling="intensityCeiling ?? null" />
+    <CalendarSessionBadge v-if="sessionName && discipline" :session-name="sessionName" :discipline="discipline" />
   </button>
 </template>
 

@@ -9,15 +9,15 @@ const route = useRoute()
 const year = computed(() => Number(route.params.year))
 const month = computed(() => Number(route.params.month))
 
-const { days, status, loading, load, loadDaySummaries, loadTrainingPlan, save, confirmMonth } = useMonth(year, month)
+const { days, status, loading, trainingDays, load, loadDaySummaries, loadTrainingPlan, save, confirmMonth } = useMonth(year, month)
 const { data: shiftCodesData } = await useFetch<ShiftCode[]>('/api/shift-codes')
 
-const requestFetch = useRequestFetch()
 const selectedTrainingDay = ref<TrainingDay | null>(null)
 
-async function openSessionDetail(date: string) {
-  const data = await requestFetch<{ days: TrainingDay[] }>(`/api/training/${year.value}/${month.value}`)
-  selectedTrainingDay.value = data.days.find(d => d.date === date) ?? null
+// trainingDays is already populated by loadTrainingPlan() (called from loadAll() below), so
+// opening the detail panel is just a lookup — no extra fetch needed.
+function openSessionDetail(date: string) {
+  selectedTrainingDay.value = trainingDays.value.find(d => d.date === date) ?? null
 }
 
 async function loadAll() {
@@ -124,7 +124,7 @@ function nextMonth() {
       v-if="selectedTrainingDay"
       :day="selectedTrainingDay"
       @close="selectedTrainingDay = null"
-      @logged="async () => { await openSessionDetail(selectedTrainingDay!.date); await loadTrainingPlan() }"
+      @logged="async () => { const loggedDate = selectedTrainingDay!.date; await loadTrainingPlan(); openSessionDetail(loggedDate) }"
     />
 
     <footer class="actions">

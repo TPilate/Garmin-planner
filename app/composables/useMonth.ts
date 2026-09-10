@@ -54,6 +54,10 @@ export function useMonth(year: Ref<number>, month: Ref<number>) {
   const days = ref<MonthDay[]>([])
   const status = ref<MonthData['status']>('draft')
   const loading = ref(false)
+  // Full training-plan response from the last loadTrainingPlan() call, kept around so callers
+  // (e.g. the session-detail panel's "logged" handler) can re-derive a single day's full detail
+  // from it instead of issuing a second fetch of the same endpoint.
+  const trainingDays = ref<TrainingDay[]>([])
 
   // useRequestFetch() forwards the incoming request's cookies during SSR (plain global $fetch
   // does not) — without it, the first server-rendered load of this page 401s against its own
@@ -90,6 +94,7 @@ export function useMonth(year: Ref<number>, month: Ref<number>) {
   // for a NO_DATA month: those days just come back with hasSession=false.
   async function loadTrainingPlan() {
     const data = await requestFetch<{ days: TrainingDay[] }>(`/api/training/${year.value}/${month.value}`)
+    trainingDays.value = data.days
     const byDate = new Map(data.days.map(t => [t.date, t]))
     for (const day of days.value) {
       const training = byDate.get(day.date)
@@ -116,5 +121,5 @@ export function useMonth(year: Ref<number>, month: Ref<number>) {
     })
   }
 
-  return { days, status, loading, load, loadDaySummaries, loadTrainingPlan, save, confirmMonth }
+  return { days, status, loading, trainingDays, load, loadDaySummaries, loadTrainingPlan, save, confirmMonth }
 }

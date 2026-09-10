@@ -28,15 +28,32 @@ const rpe = ref<number | null>(null)
 const duration = ref<number | null>(props.day.durationMinutes ?? null)
 const notes = ref('')
 const logging = ref(false)
+const error = ref<string | null>(null)
+
+// v-model.number sends "" (not null) when the field is cleared — the zod schema on the server
+// rejects that with a 400. Coerce to null before sending so "cleared" round-trips as "no value".
+function numberOrNull(value: unknown): number | null {
+  return value === '' || value == null ? null : (value as number)
+}
 
 async function log(status: 'completed' | 'skipped') {
   logging.value = true
+  error.value = null
   try {
     await $fetch('/api/training/log', {
       method: 'POST',
-      body: { date: props.day.date, status, actualRpe: rpe.value, actualDurationMinutes: duration.value, notes: notes.value || null },
+      body: {
+        date: props.day.date,
+        status,
+        actualRpe: numberOrNull(rpe.value),
+        actualDurationMinutes: numberOrNull(duration.value),
+        notes: notes.value || null,
+      },
     })
     emit('logged')
+  }
+  catch {
+    error.value = 'Impossible d\'enregistrer la séance. Vérifie les champs et réessaie.'
   }
   finally {
     logging.value = false
@@ -63,6 +80,9 @@ async function log(status: 'completed' | 'skipped') {
         <label>RPE (1-10) <input v-model.number="rpe" type="number" min="1" max="10"></label>
         <label>Durée réelle (min) <input v-model.number="duration" type="number" min="1"></label>
         <label>Notes <input v-model="notes"></label>
+        <p v-if="error" class="error">
+          {{ error }}
+        </p>
         <div class="actions">
           <button type="button" :disabled="logging" @click="log('completed')">
             Fait
@@ -105,5 +125,10 @@ async function log(status: 'completed' | 'skipped') {
 .actions {
   display: flex;
   gap: 0.5rem;
+}
+.error {
+  color: #b91c1c;
+  font-size: 0.85rem;
+  margin: 0;
 }
 </style>

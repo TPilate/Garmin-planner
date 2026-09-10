@@ -33,11 +33,30 @@ const rows = computed<DisciplineGoal[]>(() => {
 })
 
 const saving = ref<string | null>(null)
+const error = ref<string | null>(null)
+
+// v-model.number sends "" (not null) when a numeric field is cleared — the zod schema on the
+// server requires a positive integer and rejects "" with a 400. Coerce before sending.
+function numberOrNull(value: unknown): number | null {
+  return value === '' || value == null ? null : (value as number)
+}
+
 async function saveGoal(g: DisciplineGoal) {
   saving.value = g.discipline
+  error.value = null
   try {
-    await $fetch('/api/goals', { method: 'PUT', body: g })
+    await $fetch('/api/goals', {
+      method: 'PUT',
+      body: {
+        ...g,
+        weeklyFrequencyTarget: numberOrNull(g.weeklyFrequencyTarget),
+        blockLengthWeeks: numberOrNull(g.blockLengthWeeks),
+      },
+    })
     await refresh()
+  }
+  catch {
+    error.value = `Impossible d'enregistrer l'objectif pour ${DISCIPLINE_LABELS[g.discipline]}. Vérifie les champs et réessaie.`
   }
   finally {
     saving.value = null
@@ -51,6 +70,9 @@ async function saveGoal(g: DisciplineGoal) {
     <p class="hint">
       Le niveau de départ (allure seuil, allure/100m, charges clés) se saisit en JSON libre dans
       "Niveau de départ" — la forme est propre à chaque discipline, pas de format imposé.
+    </p>
+    <p v-if="error" class="error">
+      {{ error }}
     </p>
 
     <table>
@@ -87,6 +109,10 @@ async function saveGoal(g: DisciplineGoal) {
 }
 .hint {
   color: #6b7280;
+  font-size: 0.85rem;
+}
+.error {
+  color: #b91c1c;
   font-size: 0.85rem;
 }
 table {

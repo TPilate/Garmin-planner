@@ -161,7 +161,13 @@ async function pickTemplate(
       or(eq(sessionTemplates.phase, phase), eq(sessionTemplates.phase, 'any')),
     ),
   })
-  const fitting = candidates.filter(t => INTENSITY_ORDER.indexOf(t.targetIntensity) <= maxIndex)
+  // indexOf returns -1 for a targetIntensity outside INTENSITY_ORDER (e.g. a row left over from
+  // before this enum existed) — without the `i >= 0` guard, -1 <= maxIndex is always true and
+  // such a row would incorrectly match EVERY ceiling, including 'mobility'.
+  const fitting = candidates.filter((t) => {
+    const i = INTENSITY_ORDER.indexOf(t.targetIntensity)
+    return i >= 0 && i <= maxIndex
+  })
   if (fitting.length === 0) return null
 
   const fresh = fitting.filter(t => !excludeIds.has(t.id))

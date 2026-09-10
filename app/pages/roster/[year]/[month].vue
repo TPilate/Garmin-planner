@@ -12,6 +12,14 @@ const month = computed(() => Number(route.params.month))
 const { days, status, loading, load, loadDaySummaries, loadTrainingPlan, save, confirmMonth } = useMonth(year, month)
 const { data: shiftCodesData } = await useFetch<ShiftCode[]>('/api/shift-codes')
 
+const requestFetch = useRequestFetch()
+const selectedTrainingDay = ref<TrainingDay | null>(null)
+
+async function openSessionDetail(date: string) {
+  const data = await requestFetch<{ days: TrainingDay[] }>(`/api/training/${year.value}/${month.value}`)
+  selectedTrainingDay.value = data.days.find(d => d.date === date) ?? null
+}
+
 async function loadAll() {
   await load()
   // Only meaningful once the month is confirmed (day-summary returns NO_DATA otherwise) —
@@ -30,8 +38,11 @@ const activeCodes = computed(() => (shiftCodesData.value ?? []).filter(c => c.ac
 // Tap-to-cycle: null -> J -> N -> 1/2 -> null (order follows shift_codes, never hardcoded here).
 // This is the review/correction UI too — the same interaction confirms or fixes an OCR pre-fill
 // once phase 5 lands.
-function cycleCode(date: string) {
-  if (status.value === 'confirmed') return
+function onDayClick(date: string) {
+  if (status.value === 'confirmed') {
+    openSessionDetail(date)
+    return
+  }
   const day = days.value.find(d => d.date === date)
   if (!day) return
   const options = [null, ...activeCodes.value]
@@ -106,7 +117,14 @@ function nextMonth() {
     <CalendarMonthGrid
       :days="days"
       :disabled="loading"
-      @toggle="cycleCode"
+      @toggle="onDayClick"
+    />
+
+    <CalendarSessionDetail
+      v-if="selectedTrainingDay"
+      :day="selectedTrainingDay"
+      @close="selectedTrainingDay = null"
+      @logged="async () => { await openSessionDetail(selectedTrainingDay!.date); await loadTrainingPlan() }"
     />
 
     <footer class="actions">

@@ -1,46 +1,61 @@
 import { eq } from 'drizzle-orm'
 import { loggedSessions, sessionTemplates } from '~~/db/schema'
 
-// One entry per calendar day of the month, generating (and persisting, via ensurePlannedSession)
-// a prescription for any day that doesn't have one yet. Mirrors day-summary/[year]/[month].get.ts.
+// One entry per calendar day of the month. NEVER persists anything — a day with an existing
+// logged_sessions row (real history: logged, or planned by a PRIOR call to POST /api/training/log)
+// is read back verbatim; every other day gets a freshly-computed, non-persisted prescription for
+// display only. This is deliberate: see docs/superpowers/specs/.../design.md "jamais pré-généré en
+// masse" — bulk-persisting a month's worth of `planned` rows on first view collapses
+// getDisciplineProgress()'s weekly-deficit ranking (which only counts status='completed') onto a
+// single discipline for the whole week, and then never re-derives once the roster changes
+// underneath it. logged_sessions rows are created in exactly one place: ensurePlannedSession(),
+// called from POST /api/training/log at the moment the user actually logs a session.
 export default defineEventHandler(async (event) => {
   const { year, month } = parseYearMonth(event)
   const config = useRuntimeConfig(event)
   const skeleton = generateMonthSkeleton(year, month)
 
-  // Sequential, not Promise.all: ensurePlannedSession has a write side effect (it reads
-  // logged_sessions for "recently used templates" then inserts a new row), and its variety
-  // logic depends on each day's read seeing the PRIOR day's write already committed. Running
-  // the whole month concurrently would race every day's read ahead of its siblings' writes and
-  // collapse them all onto the same lowest-id template per discipline.
-  const days = []
-  for (const { date } of skeleton) {
-    const loggedSessionId = await ensurePlannedSession(date, config.appTimezone)
-    if (loggedSessionId === null) {
-      const prescription = await getDailyPrescription(date, config.appTimezone)
-      days.push({ date, hasSession: false, reason: prescription.reason })
-      continue
+  // Promise.all is safe here: every branch is a pure read (existing-row lookup, or a
+  // non-persisted getDailyPrescription() call) — no write side effect, so no ordering
+  // dependency between sibling days.
+  const days = await Promise.all(skeleton.map(async ({ date }) => {
+    const existing = await db.query.loggedSessions.findFirst({ where: eq(loggedSessions.date, date) })
+    if (existing) {
+      const template = existing.sessionTemplateId
+        ? await db.query.sessionTemplates.findFirst({ where: eq(sessionTemplates.id, existing.sessionTemplateId) })
+        : null
+      return {
+        date,
+        hasSession: true,
+        discipline: template?.discipline,
+        sessionName: template?.name,
+        targetIntensity: template?.targetIntensity,
+        durationMinutes: template?.durationMinutes,
+        structureJson: template?.structureJson,
+        status: existing.status,
+        actualRpe: existing.actualRpe,
+        actualDurationMinutes: existing.actualDurationMinutes,
+        notes: existing.notes,
+      }
     }
 
-    const row = await db
-      .select({
-        status: loggedSessions.status,
-        actualRpe: loggedSessions.actualRpe,
-        actualDurationMinutes: loggedSessions.actualDurationMinutes,
-        notes: loggedSessions.notes,
-        sessionName: sessionTemplates.name,
-        discipline: sessionTemplates.discipline,
-        targetIntensity: sessionTemplates.targetIntensity,
-        durationMinutes: sessionTemplates.durationMinutes,
-        structureJson: sessionTemplates.structureJson,
-      })
-      .from(loggedSessions)
-      .innerJoin(sessionTemplates, eq(loggedSessions.sessionTemplateId, sessionTemplates.id))
-      .where(eq(loggedSessions.id, loggedSessionId))
-      .then(rows => rows[0])
-
-    days.push({ date, hasSession: true, ...row })
-  }
+    // No row yet: compute a fresh, NON-PERSISTED prescription for display only.
+    const prescription = await getDailyPrescription(date, config.appTimezone)
+    if (!prescription.hasSession) {
+      return { date, hasSession: false, reason: prescription.reason }
+    }
+    const template = await db.query.sessionTemplates.findFirst({ where: eq(sessionTemplates.id, prescription.sessionTemplateId!) })
+    return {
+      date,
+      hasSession: true,
+      discipline: prescription.discipline,
+      sessionName: template?.name,
+      targetIntensity: template?.targetIntensity,
+      durationMinutes: template?.durationMinutes,
+      structureJson: template?.structureJson,
+      status: 'planned' as const, // virtual — not written to the DB
+    }
+  }))
 
   return { year, month, days }
 })

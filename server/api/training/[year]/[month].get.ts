@@ -8,11 +8,18 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
   const skeleton = generateMonthSkeleton(year, month)
 
-  const days = await Promise.all(skeleton.map(async ({ date }) => {
+  // Sequential, not Promise.all: ensurePlannedSession has a write side effect (it reads
+  // logged_sessions for "recently used templates" then inserts a new row), and its variety
+  // logic depends on each day's read seeing the PRIOR day's write already committed. Running
+  // the whole month concurrently would race every day's read ahead of its siblings' writes and
+  // collapse them all onto the same lowest-id template per discipline.
+  const days = []
+  for (const { date } of skeleton) {
     const loggedSessionId = await ensurePlannedSession(date, config.appTimezone)
     if (loggedSessionId === null) {
       const prescription = await getDailyPrescription(date, config.appTimezone)
-      return { date, hasSession: false, reason: prescription.reason }
+      days.push({ date, hasSession: false, reason: prescription.reason })
+      continue
     }
 
     const row = await db
@@ -32,8 +39,8 @@ export default defineEventHandler(async (event) => {
       .where(eq(loggedSessions.id, loggedSessionId))
       .then(rows => rows[0])
 
-    return { date, hasSession: true, ...row }
-  }))
+    days.push({ date, hasSession: true, ...row })
+  }
 
   return { year, month, days }
 })

@@ -42,14 +42,47 @@ async function submit() {
   min-height: 100vh;
   align-items: center;
   justify-content: center;
+  font-family: var(--font-body);
 }
 form {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 12px;
   width: min(280px, 90vw);
 }
+label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+input {
+  padding: 12px 14px;
+  border: 1px solid var(--border-accent);
+  border-radius: 8px;
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--text);
+}
+button {
+  padding: 14px;
+  border-radius: 8px;
+  border: none;
+  background: var(--mint-chip);
+  color: #24352F;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+}
+button:hover {
+  background: var(--mint-hover);
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 .error {
-  color: #dc2626;
+  color: #B4472A;
+  font-size: 13px;
+  margin: 0;
 }
 </style>

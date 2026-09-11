@@ -30,6 +30,6 @@ const emit = defineEmits<{ toggle: [date: string] }>()
 .grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 0.4rem;
+  gap: 5px;
 }
 </style>

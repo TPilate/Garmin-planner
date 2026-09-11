@@ -119,22 +119,62 @@ async function addCode() {
 .page {
   max-width: 900px;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 16px;
+  font-family: var(--font-body);
+  color: var(--text);
+}
+h1 {
+  font-size: 20px;
+  font-weight: 600;
 }
 .hint {
-  color: #6b7280;
-  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 table {
   width: 100%;
   border-collapse: collapse;
+  font-size: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  overflow: hidden;
 }
 td, th {
-  border: 1px solid #e5e7eb;
-  padding: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
   text-align: left;
 }
-input[type='text'], input:not([type]) {
+th {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-label);
+  background: var(--fill);
+}
+input, select {
   width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-accent);
+  border-radius: 6px;
+  background: var(--fill);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+}
+button {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: none;
+  background: var(--mint-chip);
+  color: #24352F;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 12px;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

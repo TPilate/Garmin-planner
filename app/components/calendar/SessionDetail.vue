@@ -102,32 +102,80 @@ async function log(status: 'completed' | 'skipped') {
 <style scoped>
 .detail {
   margin-top: 1rem;
-  padding: 0.75rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
+  padding: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
   position: relative;
+  font-family: var(--font-body);
+  color: var(--text);
+}
+.detail h2 {
+  font-size: 19px;
+  margin: 0 0 4px;
 }
 .close {
   position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  color: var(--text-label);
+  cursor: pointer;
+  font-size: 14px;
 }
 .meta {
-  color: #6b7280;
-  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.detail ul {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  font-size: 14px;
+  color: var(--text-secondary);
 }
 .log-form {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.75rem;
+  gap: 10px;
+  margin-top: 16px;
+}
+.log-form label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.log-form input {
+  padding: 10px 12px;
+  border: 1px solid var(--border-accent);
+  border-radius: 8px;
+  background: var(--fill);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text);
 }
 .actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 10px;
+}
+.actions button {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-accent);
+  background: var(--mint-chip);
+  color: #24352F;
+  font-weight: 600;
+  cursor: pointer;
+}
+.actions button:last-child {
+  background: none;
+  color: var(--text-secondary);
 }
 .error {
-  color: #b91c1c;
+  color: #B4472A;
   font-size: 0.85rem;
   margin: 0;
 }

@@ -33,6 +33,8 @@ const CEILING_BY_DAY_TYPE: Record<DayType, IntensityLevel | null> = {
   unknown: 'rest', // unmapped shift_codes.category — fail safe
 }
 
+export interface BaselineRange { median: number, p25: number, p75: number }
+
 export interface DaySummary {
   date: string
   dayType: DayType
@@ -40,6 +42,13 @@ export interface DaySummary {
   intensityCeiling: IntensityLevel | null
   garminUsed: boolean
   reason?: string
+  // Raw Garmin values + the 28-day baseline they were compared against — populated only when
+  // garminUsed is true. Display-only: never re-derive a decision from these client-side, the
+  // ceiling above is already the single source of truth.
+  garminRestingHr?: number | null
+  garminHrvLastNight?: number | null
+  baselineRestingHr?: BaselineRange | null
+  baselineHrv?: BaselineRange | null
 }
 
 interface DayClassification {
@@ -61,8 +70,20 @@ function finalize(
   intensityCeiling: IntensityLevel | null,
   garminUsed: boolean,
   reason?: string,
+  extra?: Pick<DaySummary, 'garminRestingHr' | 'garminHrvLastNight' | 'baselineRestingHr' | 'baselineHrv'>,
 ): DaySummary {
-  return { date, dayType, metricsDegraded, intensityCeiling, garminUsed, reason }
+  return { date, dayType, metricsDegraded, intensityCeiling, garminUsed, reason, ...extra }
+}
+
+// Most recent date Garmin data was normalized for, across all metric types — used to tell "no
+// data for today" apart from "sync has been broken for days" in the UI. Independent of any
+// specific date's classification.
+export async function getLastGarminSyncAt(): Promise<Date | null> {
+  const rows = await db.query.garminDailyMetrics.findMany({
+    orderBy: (t, { desc }) => desc(t.normalizedAt),
+    limit: 1,
+  })
+  return rows[0]?.normalizedAt ?? null
 }
 
 async function findConfirmedRosterMonth(date: string) {
@@ -227,5 +248,10 @@ export async function getDaySummary(date: string, timezone: string): Promise<Day
   const adjustment = compareToBaseline(garmin, baseline)
   const ceiling = adjustment === 0 ? baseCeiling : clampIntensity(baseCeiling, adjustment)
 
-  return finalize(date, classification.dayType, false, ceiling, true)
+  return finalize(date, classification.dayType, false, ceiling, true, undefined, {
+    garminRestingHr: garmin.restingHr,
+    garminHrvLastNight: garmin.hrvLastNight,
+    baselineRestingHr: baseline.restingHr,
+    baselineHrv: baseline.hrv,
+  })
 }

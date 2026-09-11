@@ -4,6 +4,16 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: ['@vite-pwa/nuxt', 'nuxt-auth-utils'],
 
+  app: {
+    head: {
+      link: [
+        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap' },
+      ],
+    },
+  },
+
   runtimeConfig: {
     tursoUrl: process.env.TURSO_URL,
     tursoAuthToken: process.env.TURSO_AUTH_TOKEN,
@@ -18,8 +28,8 @@ export default defineNuxtConfig({
       name: 'Garmin Planner',
       short_name: 'Planner',
       description: 'Planificateur d’entraînement adapté aux gardes',
-      theme_color: '#111827',
-      background_color: '#111827',
+      theme_color: '#EFEDE7',
+      background_color: '#EFEDE7',
       display: 'standalone',
       start_url: '/',
       icons: [
@@ -33,7 +43,7 @@ export default defineNuxtConfig({
       globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
       runtimeCaching: [
         {
-          urlPattern: /\/api\/(roster|day-summary)\/.*/,
+          urlPattern: /\/api\/(roster|day-summary|training|today)\/.*|\/api\/goals$/,
           handler: 'StaleWhileRevalidate',
           options: { cacheName: 'api-read-cache' },
         },

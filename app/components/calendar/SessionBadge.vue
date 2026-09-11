@@ -21,8 +21,9 @@ const DISCIPLINE_ICONS: Record<string, string> = {
 <style scoped>
 .session-badge {
   display: block;
-  font-size: 0.5rem;
-  color: #374151;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-label);
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;

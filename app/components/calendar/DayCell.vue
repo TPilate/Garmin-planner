@@ -10,22 +10,13 @@ defineProps<{
   discipline?: 'running' | 'swimming' | 'strength' | 'cycling' | null
 }>()
 defineEmits<{ click: [] }>()
-
-// Shift-code-specific colors are a display-only convenience — falls back to gray for any
-// code not in this map, so a newly-added admin shift_codes entry never breaks rendering.
-const CODE_COLORS: Record<string, string> = {
-  J: '#f59e0b',
-  N: '#6366f1',
-  '1/2': '#10b981',
-}
 </script>
 
 <template>
   <button
     type="button"
     class="cell"
-    :class="{ leave: isLeave }"
-    :style="code ? { borderColor: CODE_COLORS[code] ?? '#9ca3af' } : {}"
+    :class="{ leave: isLeave, coded: code }"
     :disabled="disabled"
     @click="$emit('click')"
   >
@@ -47,31 +38,39 @@ const CODE_COLORS: Record<string, string> = {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
-  border: 2px solid #e5e7eb;
-  border-radius: 0.5rem;
-  background: white;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--fill);
   cursor: pointer;
+  font-family: var(--font-body);
+}
+.cell.coded {
+  border-color: var(--border-accent);
 }
 .cell:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
 .cell.leave {
-  background: #f3f4f6;
+  background: var(--fill-strong);
 }
 .day {
-  font-size: 0.8rem;
-  color: #6b7280;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 .degraded-mark {
   font-size: 0.7rem;
 }
 .code {
-  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
 }
 .leave-label {
-  font-size: 0.6rem;
+  font-size: 9px;
   font-weight: 400;
 }
 </style>
